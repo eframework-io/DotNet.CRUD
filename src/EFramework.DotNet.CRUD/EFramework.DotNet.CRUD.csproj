@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1</TargetFrameworks>
+    <LangVersion>9.0</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EFramework.DotNet.Utility" Version="0.2.0" />
+    <PackageReference Include="SqlSugarCore" Version="5.1.4.207" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PackageId>EFramework.DotNet.CRUD</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>EFramework Innovation</Authors>
+    <Description>集成了 SqlSugar 的扩展功能以及对 NoSQL 键值存储的支持，专为游戏类等对数据操作性能和延迟有严格要求的业务场景设计。</Description>
+    <PackageProjectUrl>https://github.com/eframework-io/DotNet.CRUD</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/eframework-io/DotNet.CRUD.git</RepositoryUrl>
+    <PackageTags>eframework dotnet crud</PackageTags>
+    <Copyright>Copyright (c) 2025 EFramework Innovation</Copyright>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../CHANGELOG.md" Pack="true" PackagePath="" />
+    <None Include="../../CONTRIBUTING.md" Pack="true" PackagePath="" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

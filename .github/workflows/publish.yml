@@ -1,0 +1,192 @@
+name: 版本发布
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_version:
+        description: "输入发布版本（如：1.0.0，默认递增）"
+        required: false
+      confirm_repo:
+        description: "确认仓库名称"
+        required: true
+
+jobs:
+  prepare:
+    name: 准备发布环境
+    runs-on: ubuntu-latest
+    env:
+      TZ: "Asia/Shanghai"
+    outputs:
+      new_version: ${{ steps.get_version.outputs.new_version }}
+      release_title: ${{ steps.parse_changelog.outputs.release_title }}
+      release_content: ${{ steps.parse_changelog.outputs.release_content }}
+    steps:
+      - name: 验证仓库名称
+        if: ${{ ! (github.repository == github.event.inputs.confirm_repo || endsWith(github.repository, format('/{0}', github.event.inputs.confirm_repo))) }}
+        run: |
+          echo "❌ 仓库名称不匹配，输入: ${{ github.event.inputs.confirm_repo }}，期望: ${{ github.repository }}"
+          exit 1
+
+      - name: 检出项目仓库
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: 计算版本名称
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.new_version }}" ]; then
+            VERSION="${{ github.event.inputs.new_version }}"
+          else
+            # 获取最新tag版本号并加1
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            LATEST_VERSION=${LATEST_TAG#v}
+            IFS='.' read -r -a VERSION_PARTS <<< "$LATEST_VERSION"
+            PATCH=$((VERSION_PARTS[2] + 1))
+            VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+          fi
+
+          # 验证版本号格式
+          if ! echo "$VERSION" | grep -E "^[0-9]+\.[0-9]+\.[0-9]+$" > /dev/null; then
+            echo "❌ 错误：版本号格式不正确。应为：X.Y.Z（如：1.0.0）"
+            exit 1
+          fi
+
+          # 检查版本号是否已存在
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "❌ 错误：版本 v$VERSION 已存在"
+            exit 1
+          fi
+
+          echo "new_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "将发布版本：v$VERSION"
+
+      - name: 获取发行说明
+        id: parse_changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.new_version }}"
+          CHANGELOG_FILE="CHANGELOG.md"
+
+          # 检查 CHANGELOG.md 是否存在
+          if [ ! -f "$CHANGELOG_FILE" ]; then
+            echo "❌ 错误：$CHANGELOG_FILE 文件不存在"
+            exit 1
+          fi
+
+          # 提取标题
+          TITLE_LINE=$(grep -n "## \[$VERSION\]" "$CHANGELOG_FILE" | cut -d ":" -f 1)
+          if [ -z "$TITLE_LINE" ]; then
+            echo "❌ 错误：在 $CHANGELOG_FILE 中未找到版本 [$VERSION] 的更新记录" 
+            exit 1 
+          fi
+          RELEASE_TITLE=$(sed -n "${TITLE_LINE}p" "$CHANGELOG_FILE" | sed 's/^##\s*//g' | sed 's/^\s*//;s/\s*$//')
+          echo "版本标题：$RELEASE_TITLE"
+
+          # 计算内容的起始行和结束行
+          START_LINE=$((TITLE_LINE + 1))
+          END_LINE=$(grep -n "^## " "$CHANGELOG_FILE" | cut -d ":" -f 1 | awk -v start="$START_LINE" '$1 > start' | head -1)
+
+          # 如果没有找到下一个版本标题，则使用文件末尾
+          if [ -z "$END_LINE" ]; then
+              END_LINE=$(wc -l < "$CHANGELOG_FILE")
+              CONTENT_END_LINE=$END_LINE
+          else
+              # 如果找到了下一个版本标题，则内容结束行为下一个版本标题的前一行
+              CONTENT_END_LINE=$((END_LINE - 1))
+          fi
+
+          # 提取内容
+          RELEASE_CONTENT=$(sed -n "${START_LINE},${CONTENT_END_LINE}p" "$CHANGELOG_FILE" | grep -v "^$")
+
+          # 检查提取的内容是否为空
+          if [ -z "$RELEASE_CONTENT" ]; then
+            echo "❌ 错误：发行说明内容为空，请检查 $CHANGELOG_FILE 格式"
+            exit 1
+          fi
+          echo "版本内容："
+          echo "$RELEASE_CONTENT"
+
+          # 输出变量
+          echo "release_title=$RELEASE_TITLE" >> $GITHUB_OUTPUT
+          echo "release_content<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  test:
+    name: 运行单元测试
+    needs: prepare
+    permissions:
+      checks: write
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    name: 运行版本发布
+    needs: [prepare, test]
+    if: ${{ needs.test.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      TZ: "Asia/Shanghai"
+    permissions:
+      contents: write
+    steps:
+      - name: 检出项目仓库
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: 设置发布环境
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: 发布至注册表
+        run: |
+          dotnet pack -c Release -o ./builds /p:PackageVersion=${{ needs.prepare.outputs.new_version }}
+          dotnet nuget push ./builds/*.nupkg \
+            --api-key ${{ secrets.NUGET_PUBLISH }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          echo "注册表：https://www.nuget.org/packages/$(basename "$(find . -maxdepth 1 -name '*.sln' | head -n 1)" .sln)"
+
+      - name: 提交版本标签
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.prepare.outputs.new_version }}"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "chore: 发布 v$VERSION"
+          git pull origin
+          git push origin "v$VERSION"
+
+      - name: 创建发行版本
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.prepare.outputs.new_version }}
+          name: ${{ needs.prepare.outputs.release_title }}
+          body: ${{ needs.prepare.outputs.release_content }}
+          draft: false
+          prerelease: false
+
+      - name: 通知发布版本
+        run: |
+          if [ -n "${{ secrets.DISCORD_APP_GITHUB_RELEASE }}" ]; then
+            echo "发送 Discord 通知..."
+            curl -H "Content-Type: application/json" \
+                 -d "$(jq -n \
+                      --arg title "🚀 ${{ github.event.repository.name }} 发布了新版本：${{ needs.prepare.outputs.release_title }}" \
+                      --arg url "https://github.com/${{ github.repository }}/releases/tag/v${{ needs.prepare.outputs.new_version }}" \
+                      --arg desc "${{ needs.prepare.outputs.release_content }}" \
+                      '{embeds: [{title: $title, url: $url, description: $desc, color: 5814783}]}')" \
+                 ${{ secrets.DISCORD_APP_GITHUB_RELEASE }}
+            echo "Discord 通知发送完成"
+          else
+            echo "跳过 Discord 通知：DISCORD_APP_GITHUB_RELEASE 未配置"
+          fi

@@ -1,0 +1,52 @@
+# === .NET 构建输出 ===
+bin/
+obj/
+out/
+[Bb]uild/
+[Ll]og/
+[Tt]emp/
+
+# === 用户特定文件 ===
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# === 测试结果 ===
+TestResult*/
+*.VisualState.xml
+*.coverage
+*.coveragexml
+*.trx
+
+# === NuGet 包管理 ===
+*.nupkg
+*.snupkg
+*.nuspec
+# NuGet 缓存文件夹
+packages/
+*.nuget.props
+*.nuget.targets
+
+# === 临时和锁文件 ===
+*.tmp
+*.log
+*.bak
+*.cache
+*.db
+*.lock.json
+
+# === 调试和发布 ===
+*.pdb
+*.mdb
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+*.ipa
+
+# === 环境文件 ===
+.env
+.env.*

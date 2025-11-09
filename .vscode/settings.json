@@ -1,0 +1,6 @@
+{
+    "dotnet.defaultSolution": "EFramework.DotNet.CRUD.sln",
+    "dotrush.roslyn.projectOrSolutionFiles": [
+        "EFramework.DotNet.CRUD.sln"
+    ]
+}
