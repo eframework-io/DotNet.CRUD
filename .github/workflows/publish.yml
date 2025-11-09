@@ -30,7 +30,6 @@ jobs:
       - name: 检出项目仓库
         uses: actions/checkout@v5
         with:
-          lfs: true
           fetch-depth: 0
 
       - name: 计算版本名称
@@ -135,8 +134,6 @@ jobs:
     steps:
       - name: 检出项目仓库
         uses: actions/checkout@v5
-        with:
-          lfs: true
 
       - name: 设置发布环境
         uses: actions/setup-dotnet@v5
