@@ -399,9 +399,9 @@ namespace EFramework.DotNet.CRUD
         internal static readonly ConcurrentDictionary<int, Context> DeferringContexts = new();
 
         /// <summary>
-        /// Looms 是业务线程的 SqlSugarClient 客户端列表。
+        /// Looms 是业务线程的 SqlSugarClient 客户端字典。
         /// </summary>
-        internal static readonly List<SqlSugarClient> Looms = new();
+        internal static readonly ConcurrentDictionary<int, SqlSugarClient> Looms = new();
 
         /// <summary>
         /// OnLogExecuting 是 SqlSugarClient 的 Aop.OnLogExecuting 事件的回调。
@@ -414,7 +414,7 @@ namespace EFramework.DotNet.CRUD
             if (context == null) return;
             var cost = XPool.Object<Context.Cost>.Get();
             cost.Sql = sql;
-            cost.Executing = XTime.GetMillisecond();
+            cost.Executing = XTime.GetMicrosecond();
             context.Costs.Add(cost);
         }
 
@@ -426,7 +426,7 @@ namespace EFramework.DotNet.CRUD
             Contexts.TryGetValue(Environment.CurrentManagedThreadId, out var context);
             if (context == null) DeferringContexts.TryGetValue(Environment.CurrentManagedThreadId, out context);
             if (context == null) return;
-            if (context.Costs.Count > 0) context.Costs[^1].Executed = XTime.GetMillisecond();
+            if (context.Costs.Count > 0) context.Costs[^1].Executed = XTime.GetMicrosecond();
         }
 
         /// <summary>
@@ -437,28 +437,25 @@ namespace EFramework.DotNet.CRUD
             Contexts.GetOrAdd(Environment.CurrentManagedThreadId, _ =>
             {
                 var context = XPool.Object<Context>.Get();
-                context.Initial = XTime.GetMillisecond();
+                context.Initial = XTime.GetMicrosecond();
                 var loomID = XLoom.ID();
                 if (loomID >= 0 && loomID < XLoom.Count)
                 {
-                    if (Looms.Count == 0)
+                    if (!Looms.TryGetValue(loomID, out var client))
                     {
                         lock (Looms)
                         {
-                            if (Looms.Count == 0)
+                            if (!Looms.TryGetValue(loomID, out client))
                             {
-                                for (var i = 0; i < XLoom.Count; i++)
-                                {
-                                    var client = new SqlSugarClient(Sources);
-                                    client.BeginTran();
-                                    client.Aop.OnLogExecuting = OnLogExecuting;
-                                    client.Aop.OnLogExecuted = OnLogExecuted;
-                                    Looms.Add(client);
-                                }
+                                client = new SqlSugarClient(Sources);
+                                client.BeginTran();
+                                client.Aop.OnLogExecuting = OnLogExecuting;
+                                client.Aop.OnLogExecuted = OnLogExecuted;
+                                Looms.TryAdd(loomID, client);
                             }
                         }
                     }
-                    context.Client = Looms[loomID];
+                    context.Client = client;
                 }
                 else
                 {
@@ -477,7 +474,7 @@ namespace EFramework.DotNet.CRUD
         /// </summary>
         public static void Defer()
         {
-            var milliseconds = XTime.GetMillisecond();
+            var microseconds = XTime.GetMicrosecond();
             Contexts.TryRemove(Environment.CurrentManagedThreadId, out var context);
             if (context == null) XLog.Error("XOrm.Defer: context not found.");
             else
@@ -503,24 +500,23 @@ namespace EFramework.DotNet.CRUD
                         if (kvp.Sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)) { updateCount++; updateCost += kvp.Executed - kvp.Executing; }
                         if (kvp.Sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase)) { deleteCount++; deleteCost += kvp.Executed - kvp.Executing; }
                     }
-                    if (insertCount > 0) crudLog.AppendFormat("[Insert({0}):{1:F2}ms] ", insertCount, insertCost);
-                    if (queryCount > 0) crudLog.AppendFormat("[Query({0}):{1:F2}ms] ", queryCount, queryCost);
-                    if (updateCount > 0) crudLog.AppendFormat("[Update({0}):{1:F2}ms] ", updateCount, updateCost);
-                    if (deleteCount > 0) crudLog.AppendFormat("[Delete({0}):{1:F2}ms] ", deleteCount, deleteCost);
+                    if (insertCount > 0) crudLog.AppendFormat("[Insert({0}):{1:F2}ms] ", insertCount, insertCost / 1e3);
+                    if (queryCount > 0) crudLog.AppendFormat("[Query({0}):{1:F2}ms] ", queryCount, queryCost / 1e3);
+                    if (updateCount > 0) crudLog.AppendFormat("[Update({0}):{1:F2}ms] ", updateCount, updateCost / 1e3);
+                    if (deleteCount > 0) crudLog.AppendFormat("[Delete({0}):{1:F2}ms] ", deleteCount, deleteCost / 1e3);
 
-                    var nowTime = XTime.GetMillisecond();
-                    var selfCost = nowTime - milliseconds;
+                    var nowTime = XTime.GetMicrosecond();
+                    var selfCost = nowTime - microseconds;
                     var totalCost = nowTime - context.Initial;
                     var otherCost = totalCost - selfCost - insertCost - queryCost - updateCost - deleteCost;
-                    XLog.Info("XOrm.Defer: context has been deferred, total cost {0:F2}ms for {1}[Self:{2:F2}ms] [Other:{3:F2}ms].", totalCost, crudLog.ToString(), selfCost, otherCost);
+                    XLog.Info("XOrm.Defer: context has been deferred, total cost {0:F2}ms for {1}[Self:{2:F2}ms] [Other:{3:F2}ms].", totalCost / 1e3, crudLog.ToString(), selfCost / 1e3, otherCost / 1e3);
                 }
                 catch { throw; }
+                finally
                 {
                     var loomID = XLoom.ID();
                     if (loomID == -1 || loomID >= XLoom.Count) context.Client.Close();
-                    context.Reset();
-                    DeferringContexts.TryRemove(Environment.CurrentManagedThreadId, out var _);
-                    XPool.Object<Context>.Put(context);
+                    context.Reset(); DeferringContexts.TryRemove(Environment.CurrentManagedThreadId, out var _); XPool.Object<Context>.Put(context);
                 }
             }
         }

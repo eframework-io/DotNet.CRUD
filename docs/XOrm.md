@@ -229,6 +229,10 @@ Defer 结束上下文并提交事务，会自动输出性能统计信息。
 
 在 Defer 时会自动输出性能统计信息，包括 Insert、Query、Update、Delete 的次数和耗时。
 
+### 6. Too many connectionsDbType="MySql" 异常应当如何解决？
+
+运行 SHOW VARIABLES LIKE 'max_connections'; 查看 MySQL 的 max_connections 值（默认：151），可根据业务规模适当调整该值。
+
 更多问题，请查阅[问题反馈](../CONTRIBUTING.md#问题反馈)。
 
 ## 项目信息

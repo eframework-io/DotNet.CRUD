@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EFramework.DotNet.Utility" Version="0.2.0" />
+    <PackageReference Include="EFramework.DotNet.Utility" Version="0.2.1" />
     <PackageReference Include="SqlSugarCore" Version="5.1.4.207" />
   </ItemGroup>
 
