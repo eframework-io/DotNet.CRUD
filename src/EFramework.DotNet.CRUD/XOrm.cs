@@ -33,7 +33,7 @@ namespace EFramework.DotNet.CRUD
     /// var preferences = new XPrefs.IBase();
     /// var config = new XPrefs.IBase();
     /// config.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-    /// preferences.Set("XOrm/Source/MySQL/myalias", config);
+    /// preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias", config);
     /// XOrm.Initialize(preferences);
     /// </code>
     /// 
@@ -45,10 +45,10 @@ namespace EFramework.DotNet.CRUD
     /// var preferences = new XPrefs.IBase();
     /// var config1 = new XPrefs.IBase();
     /// config1.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-    /// preferences.Set("XOrm/Source/MySQL/myalias1", config1);
+    /// preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias1", config1);
     /// var config2 = new XPrefs.IBase();
     /// config2.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-    /// preferences.Set("XOrm/Source/MySQL/myalias2", config2);
+    /// preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias2", config2);
     /// XOrm.Initialize(preferences);
     /// </code>
     /// 
@@ -60,7 +60,7 @@ namespace EFramework.DotNet.CRUD
     /// var preferences = new XPrefs.IBase();
     /// var config = new XPrefs.IBase();
     /// config.Set(XOrm.Preferences.Addr, "root:123456@tcp(127.0.0.1:3306)/mysql?charset=utf8mb4&amp;loc=Local");
-    /// preferences.Set("XOrm/Source/MySQL/myalias", config);
+    /// preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias", config);
     /// XOrm.Initialize(preferences);
     /// // 会自动转换为：server=127.0.0.1;port=3306;database=mysql;uid=root;pwd=123456;
     /// </code>
@@ -225,7 +225,17 @@ namespace EFramework.DotNet.CRUD
         internal class Preferences
         {
             /// <summary>
-            /// Addr 是数据库的连接地址。
+            /// Snowflake 是雪花算法的标识配置键。
+            /// </summary>
+            internal const string Snowflake = "XOrm/Snowflake";
+
+            /// <summary>
+            /// Source 是数据库的连接配置键。
+            /// </summary>
+            internal const string Source = "XOrm/Source";
+
+            /// <summary>
+            /// Addr 是数据库的连接地址配置键。
             /// </summary>
             internal const string Addr = "Addr";
         }
@@ -352,9 +362,13 @@ namespace EFramework.DotNet.CRUD
             {
                 Sources.Clear();
 
+                var snowflake = preferences.GetInt(Preferences.Snowflake, 0);
+                SnowFlakeSingle.WorkId = snowflake;
+                XLog.Notice($"XOrm.Initialize: snowflake work id set to {snowflake}.");
+
                 foreach (var kvp in preferences)
                 {
-                    if (!kvp.Key.StartsWith("XOrm/Source")) continue;
+                    if (!kvp.Key.StartsWith(Preferences.Source)) continue;
                     var parts = kvp.Key.Split('/');
                     if (parts.Length < 4) throw new Exception("XOrm.Initialize: invalid preference key ${kvp.Key}.");
                     var type = parts[2];

@@ -38,10 +38,12 @@ public class TestXOrm
     public void Setup()
     {
         var preferences = new XPrefs.IBase();
+        preferences.Set(XOrm.Preferences.Snowflake, 10000);
         var testConfig = new XPrefs.IBase();
         testConfig.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-        preferences.Set("XOrm/Source/MySQL/myalias", testConfig);
+        preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias", testConfig);
         XOrm.Initialize(preferences);
+        Assert.That(SnowFlakeSingle.WorkId, Is.EqualTo(10000));
         var client = new SqlSugarClient(XOrm.Sources);
         try { client.DbMaintenance.TruncateTable("my_model"); } catch { }
         client.CodeFirst.InitTables<MyModel>();
@@ -76,7 +78,7 @@ public class TestXOrm
             var preferences = new XPrefs.IBase();
             var config = new XPrefs.IBase();
             config.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-            preferences.Set("XOrm/Source/MySQL/myalias", config);
+            preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias", config);
             XOrm.Initialize(preferences);
             Assert.That(XOrm.Sources, Has.Count.EqualTo(1));
             var first = XOrm.Sources.First();
@@ -91,10 +93,10 @@ public class TestXOrm
             var preferences = new XPrefs.IBase();
             var config1 = new XPrefs.IBase();
             config1.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-            preferences.Set("XOrm/Source/MySQL/myalias1", config1);
+            preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias1", config1);
             var config2 = new XPrefs.IBase();
             config2.Set(XOrm.Preferences.Addr, "server=localhost;port=3306;database=mysql;uid=root;pwd=123456;");
-            preferences.Set("XOrm/Source/MySQL/myalias2", config2);
+            preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias2", config2);
             XOrm.Initialize(preferences);
             Assert.That(XOrm.Sources, Has.Count.EqualTo(2));
             var first = XOrm.Sources.First();
@@ -113,7 +115,7 @@ public class TestXOrm
             var preferences = new XPrefs.IBase();
             var config = new XPrefs.IBase();
             config.Set(XOrm.Preferences.Addr, "root:123456@tcp(127.0.0.1:3306)/mysql?charset=utf8mb4&loc=Local");
-            preferences.Set("XOrm/Source/MySQL/myalias", config);
+            preferences.Set($"{XOrm.Preferences.Source}/MySQL/myalias", config);
             XOrm.Initialize(preferences);
             Assert.That(XOrm.Sources, Has.Count.EqualTo(1));
             var first = XOrm.Sources.First();
@@ -180,9 +182,12 @@ public class TestXOrm
             var affect = XOrm.Update<MyModel>(model1, updateable => updateable.UpdateColumns(e => new { e.IntVal, e.FloatVal }));
             Assert.That(affect, Is.EqualTo(1), "更新应当成功。");
 
+            affect = XOrm.Update<MyModel>(onUpdate => onUpdate.SetColumns(it => it.IntVal == -2).Where(it => it.ID == model1.ID));
+            Assert.That(affect, Is.EqualTo(1), "更新应当成功。");
+
             var model1Updated = XOrm.Query<MyModel>().Where(e => e.ID == model1.ID).First();
             Assert.That(model1Updated.ID, Is.EqualTo(model1.ID), "更新后的数据ID应当不变。");
-            Assert.That(model1Updated.IntVal, Is.EqualTo(-1), "更新后的数据IntVal应当为更新后的值。");
+            Assert.That(model1Updated.IntVal, Is.EqualTo(-2), "更新后的数据IntVal应当为更新后的值。");
             Assert.That(model1Updated.FloatVal, Is.EqualTo(-1.0f), "更新后的数据FloatVal应当为更新后的值。");
             Assert.That(model1Updated.StringVal, Is.EqualTo(model1.StringVal), "更新后的数据StringVal应当未被更新。");
             Assert.That(model1Updated.BoolVal, Is.EqualTo(model1.BoolVal), "更新后的数据BoolVal应当未被更新。");
@@ -206,7 +211,7 @@ public class TestXOrm
 
         XOrm.Contexts.TryGetValue(Environment.CurrentManagedThreadId, out var context);
         Assert.That(context, Is.Not.Null, "上下文应当存在。");
-        Assert.That(context.Costs.Count(e => e.Sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)), Is.EqualTo(2), "更新次数应当为2。");
+        Assert.That(context.Costs.Count(e => e.Sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)), Is.EqualTo(3), "更新次数应当为3。");
     }
 
     [Test]
