@@ -13,7 +13,7 @@
 ## 技术路线
 
 - 编程语言：C# 9.0（.NET Standard 2.1）
-- 单元测试：NUnit 3.14.0（.NET 9）
+- 单元测试：NUnit 3.14.0（.NET 9.0）
 - 开发工具：VS Code/Visual Studio
 - 集成工具：Github Actions
 
